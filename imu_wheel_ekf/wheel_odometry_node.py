@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32
+from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Quaternion
 import math
 
@@ -20,12 +20,9 @@ class WheelOdometryNode(Node):
         
         # Initialize velocity variables
         self.angular_velocity = 0.0  # Angular velocity (initialize to 0.0)
-        self.cumulative_angle = 0.0  # Cumulative angle (initialize to 0.0)
 
-        # Subscribe to encoder topics
-        self.angle_sub = self.create_subscription(Float32, '/encoder/absolute_angle', self.angle_callback, 10)
-        self.velocity_sub = self.create_subscription(Float32, '/encoder/angular_velocity', self.velocity_callback, 10)
-        self.cumulative_angle_sub = self.create_subscription(Float32, '/encoder/cumulative_angle', self.cumulative_angle_callback, 10)
+        # Subscribe to JointState topic to get wheel encoder data
+        self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
 
         # Publisher for odometry
         self.odom_pub = self.create_publisher(Odometry, 'wheel/odometry', 10)
@@ -35,7 +32,6 @@ class WheelOdometryNode(Node):
         
         # State variables for calculations
         self.last_time = self.get_clock().now()
-        self.last_angle = 0.0
 
     def quaternion_from_euler(self, roll, pitch, yaw):
         """
@@ -47,23 +43,20 @@ class WheelOdometryNode(Node):
         qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
         return [qx, qy, qz, qw]
 
-    def angle_callback(self, msg):
-        # Update the absolute angle (not used directly in this example)
-        self.last_angle = msg.data
-
-    def velocity_callback(self, msg):
-        # Update the angular velocity (used to calculate linear velocity)
-        self.angular_velocity = msg.data
-
-    def cumulative_angle_callback(self, msg):
-        # Update cumulative angle (could be used for position, but here just for completeness)
-        self.cumulative_angle = msg.data
+    def joint_state_callback(self, msg):
+        # Assuming the wheel encoder corresponds to the first joint in the list
+        # You may need to adjust this index based on your setup
+        try:
+            index = msg.name.index('propeller_guard_joint')
+            self.angular_velocity = msg.velocity[index]
+        except ValueError:
+            self.get_logger().warn("Joint 'propeller_guard_joint' not found in JointState message.")
 
     def publish_odometry(self):
         current_time = self.get_clock().now()
         dt = (current_time - self.last_time).nanoseconds / 1e9  # Convert to seconds
 
-        # Example calculation for a wheel-driven robot
+        # Calculate linear velocity from angular velocity
         linear_velocity = self.angular_velocity * self.wheel_radius
         
         # Update position (x, y) based on the velocities
@@ -75,7 +68,7 @@ class WheelOdometryNode(Node):
         # Create and populate the Odometry message
         odom = Odometry()
         odom.header.stamp = current_time.to_msg()
-        odom.header.frame_id = 'odom'
+        odom.header.frame_id = 'map'
         odom.child_frame_id = 'base_link'
 
         # Set position
@@ -94,7 +87,7 @@ class WheelOdometryNode(Node):
         # Publish odometry
         self.odom_pub.publish(odom)
         
-         # Update last time
+        # Update last time
         self.last_time = current_time
 
 

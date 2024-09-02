@@ -157,7 +157,7 @@ class EKFNode(Node):
         # Publish the EKF estimated odometry
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = 'odom'
+        odom.header.frame_id = 'map'
         odom.child_frame_id = 'base_link'
 
         odom.pose.pose.position.x = self.state[0]

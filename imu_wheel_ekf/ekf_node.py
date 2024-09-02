@@ -54,6 +54,8 @@ class EKFNode(Node):
         self.last_time = self.get_clock().now()
         self.last_yaw = 0.0
 
+        self.altitude = 0.0
+
          # Static transform broadcaster
         self.tf_broadcaster = StaticTransformBroadcaster(self)
 
@@ -65,6 +67,7 @@ class EKFNode(Node):
         """Callback function for vehicle_local_position topic subscriber."""
         self.vehicle_local_position = vehicle_local_position
         yaw = - vehicle_local_position.heading
+        self.altitude = - vehicle_local_position.z
         self.state[4] = yaw
 
     def odom_callback(self, msg):
@@ -162,7 +165,7 @@ class EKFNode(Node):
 
         odom.pose.pose.position.x = self.state[0]
         odom.pose.pose.position.y = self.state[1]
-        odom.pose.pose.position.z = 0.0  # Assuming flat ground
+        odom.pose.pose.position.z = self.altitude 
 
         # Convert yaw to quaternion
         quat = self.quaternion_from_euler(0, 0, self.state[4])
@@ -175,7 +178,7 @@ class EKFNode(Node):
         static_transform_stamped = TransformStamped()
 
         static_transform_stamped.header.stamp = self.get_clock().now().to_msg()
-        static_transform_stamped.header.frame_id = 'odom'
+        static_transform_stamped.header.frame_id = 'map'
         static_transform_stamped.child_frame_id = 'base_link'
 
         # Example: Identity transform (no translation or rotation)
